@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import connectDB from './src/config/db.js';
 import { startCronJob } from './src/cron/jobScheduler.js';
 import logger from './src/config/logger.js';
@@ -14,17 +15,18 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 app.use(express.json()); 
 
 app.get('/health', (req, res) => {
-    const dbState = connectDB.readyState === 1 ? 'OK' : 'DOWN';
+  const dbStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  const dbState = dbStates[mongoose.connection.readyState];
 
-    res.status(200).json({ 
-        status: 'ok', 
-        message: 'Deal publisher operational.',
-        environment: NODE_ENV,
-        services: {
-            database: dbState,
-            pipeline: 'Scheduled',
-        }
-    });
+  res.status(200).json({
+    status: 'ok',
+    message: 'Deal publisher operational.',
+    environment: NODE_ENV,
+    services: {
+      database: dbState === 'connected' ? 'OK' : dbState.toUpperCase(),
+      pipeline: 'Scheduled',
+    }
+  });
 });
 
 startCronJob();

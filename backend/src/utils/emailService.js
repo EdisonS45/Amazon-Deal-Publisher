@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import logger from '../config/logger.js';
 import config from '../config/index.js';
 
-export const sendEmail = async ({ subject, text }) => {
+export const sendEmail = async ({ subject, text, html }) => {
     try {
         const transporter = nodemailer.createTransport({
             host: config.EMAIL.HOST,
@@ -14,11 +14,14 @@ export const sendEmail = async ({ subject, text }) => {
             },
         });
 
+        const senderName = "Amazon Deal Publisher"; 
+        
         await transporter.sendMail({
-            from: `"Deal Fetcher Bot" <${config.EMAIL.USER}>`,
+            from: `"${senderName}" <${config.EMAIL.USER}>`,
             to: config.EMAIL.TO,
             subject,
-            text,
+            text, 
+            html, 
         });
 
         logger.info(`📧 Email sent successfully: ${subject}`);

@@ -4,11 +4,7 @@ import logger from "./logger.js";
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(config.MONGO_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000,
-        });
+        await mongoose.connect(config.MONGO_URI);
         logger.info('MongoDB connected successfully.');
     } catch (err) {
         logger.error(`MongoDB connection error: ${err.message}`);

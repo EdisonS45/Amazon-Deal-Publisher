@@ -3,11 +3,11 @@ import logger from '../config/logger.js';
 
 const extractNumber = str => {
     if (!str) return null;
-    return Number(str.replace(/[^\d.]/g, "")) || null;
+    const num = parseFloat(str.replace(/[^\d.]/g, ""));
+    return isNaN(num) ? null : num;
 };
 
 const extractCurrency = str => str.match(/[₹$€£]/)?.[0] || config.AMAZON.CURRENCY || "INR";
-
 
 const cleanAndValidateProduct = (rawProduct, category) => {
     try {
@@ -21,19 +21,35 @@ const cleanAndValidateProduct = (rawProduct, category) => {
 
         const priceStr = listing.Price.DisplayAmount;
         const origPriceStr = listing.SavingBasis?.DisplayAmount;
-        const currentPrice = extractNumber(priceStr);
-        const originalPrice = extractNumber(origPriceStr) || currentPrice;
+
+        const rawCurrentPrice = extractNumber(priceStr);
+        const rawOriginalPrice = extractNumber(origPriceStr) || rawCurrentPrice;
         const currency = extractCurrency(priceStr);
 
+        const currentPrice =  Math.floor(rawCurrentPrice);
+        const originalPrice =  Math.floor(rawOriginalPrice);
+
+        if (currentPrice === null) {
+             logger.debug(`Skipping ASIN ${asin}: Could not parse valid current price from ${priceStr}.`);
+             return null;
+        }
+
         let discountPercentage = 0;
-        if (originalPrice > currentPrice && originalPrice > 0) {
-            discountPercentage = parseFloat(((originalPrice - currentPrice) / originalPrice) * 100).toFixed(2);
+        let savingsAmount = 0;
+
+        if (originalPrice > currentPrice) {
+            const rawDiscount = ((originalPrice - currentPrice) / originalPrice) * 100;
             
+            discountPercentage = Math.floor(rawDiscount);
+            
+            const rawSavings = originalPrice - currentPrice;
+            
+            savingsAmount = Math.floor(rawSavings); 
             
         } else {
-            discountPercentage = listing.Price?.Savings?.Percentage || 0;
+            discountPercentage = 0;
+            savingsAmount = 0;
         }
-        const savingsAmount = originalPrice && currentPrice ? originalPrice - currentPrice : null;
 
         if (discountPercentage < config.MIN_DISCOUNT_PERCENT) {
             logger.debug(`Skipping ASIN ${asin}: Discount (${discountPercentage}%) below threshold.`);
@@ -53,12 +69,13 @@ const cleanAndValidateProduct = (rawProduct, category) => {
             Price: currentPrice,
             OriginalPrice: originalPrice,
             Currency: currency,
-            DiscountPercentage: Number(discountPercentage),
+            
+            DiscountPercentage: discountPercentage, 
             SavingsAmount: savingsAmount,
 
-            Brand: brand,                           
-            IsPrimeEligible: isPrimeEligible,       
-            Availability: availability,             
+            Brand: brand,
+            IsPrimeEligible: isPrimeEligible,
+            Availability: availability,
 
             Category: category,
             Marketplace: config.AMAZON.MARKETPLACE,

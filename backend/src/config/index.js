@@ -1,18 +1,18 @@
 import "dotenv/config";
 
-// if (
-//   !process.env.MONGO_URI ||
-//   !process.env.AMAZON_ACCESS_KEY ||
-//   !process.env.AMAZON_SECRET_KEY
-// ) {
-//   throw new Error("FATAL ERROR: Essential environment variables are not set");
-// }
-
 const config = {
+  TEST_MODE: true,
   MONGO_URI: process.env.MONGO_URI,
   REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
   CACHE_TTL_SECONDS: 6 * 60 * 60,
-  CRON_SCHEDULE: process.env.CRON_SCHEDULE || "0 0 * * *",
+  CRON_SCHEDULE: process.env.CRON_SCHEDULE || "*/1 * * * *",
+  PUBLER: {
+        API_KEY: process.env.PUBLER_API_KEY,
+        WORKSPACE_ID: process.env.PUBLER_WORKSPACE_ID,
+        ACCOUNTS: process.env.PUBLER_ACCOUNTS 
+            ? process.env.PUBLER_ACCOUNTS.split(',').map(a => a.trim())
+            : ['6778626ce77c42842c59202e','6901e01d1a1afe47aedde520'], 
+    },
   EMAIL: {
     HOST: process.env.EMAIL_HOST,
     PORT: process.env.EMAIL_PORT,

@@ -38,7 +38,7 @@ export const fetchDealsByCategory = async (category, itemCount = 10, retries = 3
             
             logger.info(`Successfully fetched ${items.length} raw items for ${category}.`);
 
-            await setToCache(cacheKey, items);
+            await setToCache(cacheKey, items,24 * 60 * 60);
 
             return items; 
         } catch (error) {
