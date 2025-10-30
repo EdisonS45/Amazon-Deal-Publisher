@@ -6,6 +6,7 @@ import { exportDealsToCsv } from "./csvWriter.js";
 import config from "../config/index.js";
 import { generateSocialCaption } from "./postGenerator.js";
 import { publishDealToPubler } from "./publerPublisher.js";
+import { uploadMediaToPubler } from "../utils/publerMediaUpload.js";
 
 export const fetchAndSaveDeals = async (
   categories = config.AMAZON.CATEGORIES
@@ -92,7 +93,24 @@ const scheduleSocialPosts = async (dealsToPublish) => {
 
   for (let i = 0; i < dealsToPublish.length; i++) {
     const deal = dealsToPublish[i];
-    
+    const imageUrl = deal.ImageURL; 
+
+    if (!imageUrl) {
+        logger.warn(`Deal ASIN ${deal.ASIN} is missing a product image URL. Skipping.`);
+        continue;
+    }
+    let publerMediaId = null;
+    try {
+        publerMediaId = await uploadMediaToPubler(imageUrl, deal.ASIN);
+    } catch (uploadError) {
+        logger.error(`Failed to upload media for ASIN ${deal.ASIN}: ${uploadError.message}`);
+        continue; 
+    }
+
+    if (!publerMediaId) {
+        logger.warn(`Could not retrieve Publer Media ID for ASIN ${deal.ASIN}. Skipping.`);
+        continue;
+    }
     const scheduleTime = new Date(baseTime.getTime() + i * postIntervalMs);
 
     const caption = generateSocialCaption(deal);
@@ -100,7 +118,8 @@ const scheduleSocialPosts = async (dealsToPublish) => {
     const publerResponse = await publishDealToPubler(
       deal,
       caption,
-      scheduleTime
+      scheduleTime,
+      publerMediaId
     );
 
     if (publerResponse) {

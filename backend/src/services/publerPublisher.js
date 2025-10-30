@@ -5,23 +5,39 @@ import { uploadMediaToPubler } from "../utils/publerMediaUpload.js";
 
 const PUBLER_API_URL = "https://app.publer.com/api/v1/posts/schedule";
 
-export const publishDealToPubler = async (product, postText, scheduleTime) => {
+export const publishDealToPubler = async (product, postText, scheduleTime,publerMediaId) => {
   if (!config.PUBLER.API_KEY || config.PUBLER.ACCOUNTS.length === 0) {
     logger.error("Publer configuration missing. Cannot publish deal.");
     return null;
   }
-
+  if (!publerMediaId) {
+    logger.error(`Media ID missing for ASIN ${product.ASIN}. Cannot publish.`);
+    return null;
+  }
   const isoTimestamp = scheduleTime.toISOString();
 
-  const posts = config.PUBLER.ACCOUNTS.map((accountId) => ({
+    const posts = config.PUBLER.ACCOUNTS.map((accountId) => ({
     networks: {
       facebook: {
-        type: "status",
+        type: "photo",
         text: postText,
+        media: [
+          {
+            id: publerMediaId,
+            type: "photo",
+            alt_text: "Product image",
+          },
+        ],
       },
       instagram: {
-        type: "photo", 
+        type: "photo",
         text: postText,
+        media: [
+          {
+            id: publerMediaId,
+            type: "photo",
+          },
+        ],
       },
     },
     accounts: [
@@ -31,7 +47,6 @@ export const publishDealToPubler = async (product, postText, scheduleTime) => {
       },
     ],
   }));
-
 
   const payload = {
     bulk: {
