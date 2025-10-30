@@ -47,4 +47,4 @@ coverage/
 # Optional: temporary files
 tmp/
 temp/
-/backend/exports/
+/backend/exports/*
