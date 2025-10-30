@@ -27,7 +27,7 @@ const config = {
     PARTNER_TAG: process.env.AMAZON_PARTNER_TAG,
     MARKETPLACE: process.env.AMAZON_MARKETPLACE || "www.amazon.com",
     RESOURCES: [
-      "Images.Primary.Medium",
+      "Images.Primary.Large",
       "ItemInfo.Title",
       "Offers.Listings.Price",
       "Offers.Listings.SavingBasis",

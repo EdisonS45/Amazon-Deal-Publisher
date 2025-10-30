@@ -15,23 +15,30 @@ export const generateSocialCaption = (product) => {
     return null;  
   }
 
-  const formattedPrice = `${Currency}${Price}`;
-  const formattedOriginalPrice = `${Currency}${OriginalPrice}`;
-  
+  const numericPrice = Math.floor(parseFloat(Price));
+  const numericOriginalPrice = Math.floor(parseFloat(OriginalPrice));
 
-  const shortTitle = Title.split('-')[0].trim(); 
-  
-  const template = `✨ STEAL ALERT! ${shortTitle} ✨
+  if (isNaN(numericPrice) || isNaN(numericOriginalPrice)) {
+    logger.error('❌ Invalid numeric values for price or original price');
+    return null;
+  }
 
-You won't believe this price drop! Get the **${Title}** for just **${formattedPrice}**!
+  const savings = Math.floor(numericOriginalPrice - numericPrice);
 
-That's an instant **${DiscountPercentage}% OFF**—you save ${formattedOriginalPrice - formattedPrice}. This deal ends fast.
+  const formattedPrice = `${Currency}${numericPrice}`;
+  const formattedOriginalPrice = `${Currency}${numericOriginalPrice}`;
 
-Why wait? Upgrade now and save big! 👇
+  const shortTitle = Title.split('-')[0].trim();
 
-🔗 Grab the deal here: ${ProductURL}
+  const template = `🔥 **${shortTitle}** – Now at an INSANE **${DiscountPercentage}% OFF!** 🔥
 
-#AmazonMustHaves #DealOfTheDay #${shortTitle.replace(/[^A-Za-z0-9]/g, '').slice(0, 30)} #Savings #AmazonDealsDaily`;
+💰 Price Drop: **${formattedOriginalPrice} → ${formattedPrice}**
+💸 You Save: **${Currency}${savings}**
+
+🛒 Grab it before it’s gone!
+👉 ${ProductURL}
+
+#AmazonFinds #DealOfTheDay #MegaSavings #${shortTitle.replace(/[^A-Za-z0-9]/g, '').slice(0, 25)} #StealDeal #AmazonIndia`;
 
   return template.trim();
 };

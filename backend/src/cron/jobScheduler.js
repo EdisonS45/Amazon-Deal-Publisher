@@ -1,5 +1,3 @@
-// D:\amazon-deal-publisher\backend\src\cron\jobScheduler.js (Modified for FANCY Start Email)
-
 import cron from 'node-cron';
 import config from '../config/index.js';
 import logger from '../config/logger.js';
@@ -36,7 +34,6 @@ export const startCronJob = () => {
             const startTimestamp = new Date().toLocaleString();
 
             try {
-                // 1. START Notification (FANCY HTML Report)
                 const startHtmlContent = `
                     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
                         <h2 style="color: #007bff;">🚀 CRON Job Execution Started</h2>

@@ -17,7 +17,6 @@ export const uploadMediaToPubler = async (imageUrl, asin) => {
   try {
     logger.info(`Attempting to upload media for ASIN ${asin} from URL: ${imageUrl}`);
 
-    // Step 1️⃣ — Download the image temporarily
     const response = await fetch(imageUrl);
     if (!response.ok) {
       throw new Error(`Failed to download image from URL: ${imageUrl}`);
@@ -25,27 +24,24 @@ export const uploadMediaToPubler = async (imageUrl, asin) => {
 
     const buffer = await response.arrayBuffer();
     const fileName = `temp_${asin}_${Date.now()}.jpg`;
-    const tempFilePath = path.join("/tmp", fileName); // or ./tmp if local
+    const tempFilePath = path.join("/tmp", fileName); 
 
     fs.writeFileSync(tempFilePath, Buffer.from(buffer));
 
-    // Step 2️⃣ — Create form-data exactly like Postman
     const formData = new FormData();
     formData.append("file", fs.createReadStream(tempFilePath));
-    formData.append("direct_upload", "true"); // ✅ must be string, not boolean
+    formData.append("direct_upload", "true"); 
     formData.append("in_library", "false");
 
-    // Step 3️⃣ — POST to Publer
     const uploadResponse = await axios.post(PUBLER_MEDIA_UPLOAD_URL, formData, {
       headers: {
         Authorization: `Bearer-API ${config.PUBLER.API_KEY}`,
         "Publer-Workspace-Id": config.PUBLER.WORKSPACE_ID,
-        Accept: "*/*", // matches your Postman request
+        Accept: "*/*",
         ...formData.getHeaders(),
       },
     });
 
-    // Step 4️⃣ — Cleanup temp file
     fs.unlinkSync(tempFilePath);
 
     const mediaId = uploadResponse.data.id;
