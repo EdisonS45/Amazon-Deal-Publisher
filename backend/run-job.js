@@ -7,7 +7,7 @@ import {
 } from "./src/services/dealPipeline.js";
 import { sendEmail } from "./src/utils/emailService.js";
 import mongoose from "mongoose";
-import { redisClient } from "./src/services/redisClient.js";
+import client from "./src/services/redisClient.js";
 import config from "./src/config/index.js";
 
 const COLORS = {
@@ -189,7 +189,6 @@ const runJob = async () => {
 
   try {
     await connectDB();
-    await redisClient.connect();
     logger.info("Connected to MongoDB and Redis.");
 
     const startHtmlContent = getStartEmailHtml(
@@ -240,7 +239,7 @@ const runJob = async () => {
     process.exit(1);
   } finally {
     await mongoose.disconnect();
-    await redisClient.quit();
+    await client.quit();
     logger.info("Disconnected from DB/Redis. Job finished.");
     process.exit(0);
   }
