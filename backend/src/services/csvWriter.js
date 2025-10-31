@@ -1,7 +1,7 @@
 import { createObjectCsvWriter } from "csv-writer";
 import path from "path";
 import logger from "../config/logger.js";
-
+import fs from "fs/promises";
 const CSV_HEADERS = [
   { id: "ASIN", title: "ASIN" },
   { id: "Title", title: "Product Title" },
@@ -32,7 +32,7 @@ export const exportDealsToCsv = async (records) => {
     "exports",
     `amazon_deals_${timestamp}.csv`
   );
-
+  await fs.mkdir(outputDir, { recursive: true });
   const csvWriter = createObjectCsvWriter({
     path: filePath,
     header: CSV_HEADERS,
