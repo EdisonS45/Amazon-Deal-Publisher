@@ -20,6 +20,8 @@ const productSchema = new mongoose.Schema(
     Brand: { type: String },
     IsPrimeEligible: { type: Boolean },
     Availability: { type: String },
+    RatingsCount: { type: Number, default: 0 },
+    StarRating: { type: Number, default: 0 },
 
     Category: { type: String, required: true },
     Marketplace: { type: String, default: "US" },

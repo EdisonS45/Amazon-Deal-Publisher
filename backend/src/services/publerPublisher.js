@@ -1,59 +1,46 @@
 import axios from "axios";
 import config from "../config/index.js";
 import logger from "../config/logger.js";
-import { uploadMediaToPubler } from "../utils/publerMediaUpload.js";
 
 const PUBLER_API_URL = "https://app.publer.com/api/v1/posts/schedule";
 
-export const publishDealToPubler = async (product, postText, scheduleTime,publerMediaId) => {
+export const publishDealToPubler = async (
+  product,
+  postText,
+  scheduleTime,
+  publerMediaId
+) => {
   if (!config.PUBLER.API_KEY || config.PUBLER.ACCOUNTS.length === 0) {
     logger.error("Publer configuration missing. Cannot publish deal.");
     return null;
   }
+
   if (!publerMediaId) {
     logger.error(`Media ID missing for ASIN ${product.ASIN}. Cannot publish.`);
     return null;
   }
+
   const isoTimestamp = scheduleTime.toISOString();
 
-    const posts = config.PUBLER.ACCOUNTS.map((accountId) => ({
+  const posts = config.PUBLER.ACCOUNTS.map((accountId) => ({
     networks: {
       facebook: {
         type: "photo",
         text: postText,
         media: [
-          {
-            id: publerMediaId,
-            type: "photo",
-            alt_text: "Product image",
-          },
+          { id: publerMediaId, type: "photo", alt_text: "Product image" },
         ],
       },
       instagram: {
         type: "photo",
         text: postText,
-        media: [
-          {
-            id: publerMediaId,
-            type: "photo",
-          },
-        ],
+        media: [{ id: publerMediaId, type: "photo" }],
       },
     },
-    accounts: [
-      {
-        id: accountId,
-        scheduled_at: isoTimestamp,
-      },
-    ],
+    accounts: [{ id: accountId, scheduled_at: isoTimestamp }],
   }));
 
-  const payload = {
-    bulk: {
-      state: "scheduled",
-      posts,
-    },
-  };
+  const payload = { bulk: { state: "scheduled", posts } };
 
   try {
     const response = await axios.post(PUBLER_API_URL, payload, {
@@ -64,11 +51,13 @@ export const publishDealToPubler = async (product, postText, scheduleTime,publer
         Accept: "application/json",
       },
     });
+
     logger.info(
       `✅ Publer: Successfully scheduled post for ASIN ${product.ASIN}`
     );
     logger.debug(`Response: ${JSON.stringify(response.data)}`);
-    await checkJobStatus(response.data.job_id);
+    checkJobStatus(response.data.job_id);
+
     return response.data;
   } catch (error) {
     logger.error(`❌ Publer Error for ASIN ${product.ASIN}: ${error.message}`);

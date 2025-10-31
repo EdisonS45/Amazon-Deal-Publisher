@@ -1,18 +1,30 @@
 import "dotenv/config";
 
 const config = {
-  TEST_MODE: true,
+  TEST_MODE: false,
   MONGO_URI: process.env.MONGO_URI,
   REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
   CACHE_TTL_SECONDS: 6 * 60 * 60,
   CRON_SCHEDULE: process.env.CRON_SCHEDULE || "*/1 * * * *",
+  IMAGE_DECISION: {
+    DISCOUNT_MIN: 40,
+    PRICE_MIN: 500,
+    SCORE_THRESHOLD: 5,
+    MAX_GENERATIONS_PER_RUN: 5,
+  },
+  GEMINI: {
+    API_KEY: process.env.GEMINI_API_KEY || "",
+    ENDPOINT:
+      process.env.GEMINI_ENDPOINT || "https://api.gemini.example/generate",
+    MODEL: "gemini-2.5-flash-image",
+  },
   PUBLER: {
-        API_KEY: process.env.PUBLER_API_KEY,
-        WORKSPACE_ID: process.env.PUBLER_WORKSPACE_ID,
-        ACCOUNTS: process.env.PUBLER_ACCOUNTS 
-            ? process.env.PUBLER_ACCOUNTS.split(',').map(a => a.trim())
-            : ['6778626ce77c42842c59202e','6901e01d1a1afe47aedde520'], 
-    },
+    API_KEY: process.env.PUBLER_API_KEY,
+    WORKSPACE_ID: process.env.PUBLER_WORKSPACE_ID,
+    ACCOUNTS: process.env.PUBLER_ACCOUNTS
+      ? process.env.PUBLER_ACCOUNTS.split(",").map((a) => a.trim())
+      : ["6778626ce77c42842c59202e", "6901e01d1a1afe47aedde520"],
+  },
   EMAIL: {
     HOST: process.env.EMAIL_HOST,
     PORT: process.env.EMAIL_PORT,
@@ -21,35 +33,48 @@ const config = {
     PASS: process.env.EMAIL_PASS,
     TO: process.env.EMAIL_TO,
   },
+  PUBLISHING: {
+    MAX_POSTS_PER_DAY: 70,
+    MIN_PRICE: 100,
+    MAX_POSTS_PER_CATEGORY: 5,
+    POST_INTERVAL_MINUTES: 5,
+  },
   AMAZON: {
     ACCESS_KEY: process.env.AMAZON_ACCESS_KEY,
     SECRET_KEY: process.env.AMAZON_SECRET_KEY,
     PARTNER_TAG: process.env.AMAZON_PARTNER_TAG,
     MARKETPLACE: process.env.AMAZON_MARKETPLACE || "www.amazon.com",
+    PAAPI_CONCURRENCY: 1,
     RESOURCES: [
       "Images.Primary.Large",
       "ItemInfo.Title",
       "Offers.Listings.Price",
       "Offers.Listings.SavingBasis",
+      "ItemInfo.ByLineInfo",
+      "Offers.Listings.Availability.Message",
+      "Offers.Listings.DeliveryInfo.IsPrimeEligible",
+      // "ItemInfo.CustomerReviews.StarRating",
+      // "ItemInfo.CustomerReviews.TotalReviewCount",
     ],
     CATEGORIES: [
+      "Electronics",
+      "Fashion",
+      "Beauty",
+      "HomeAndKitchen",
+      "SportsAndOutdoors",
+      "ToysAndGames",
+      "Books",
       "Apparel",
       "Appliances",
       "Automotive",
       "Baby",
-      "Beauty",
-      "Books",
       "Collectibles",
       "Computers",
-      "Electronics",
-      "EverythingElse",
-      "Fashion",
       "Furniture",
       "GardenAndOutdoor",
       "GiftCards",
       "GroceryAndGourmetFood",
       "HealthPersonalCare",
-      "HomeAndKitchen",
       "Industrial",
       "Jewelry",
       "KindleStore",
@@ -63,13 +88,11 @@ const config = {
       "PetSupplies",
       "Shoes",
       "Software",
-      "SportsAndOutdoors",
       "ToolsAndHomeImprovement",
-      "ToysAndGames",
       "VideoGames",
       "Watches",
     ],
-    ITEM_COUNT: 20,
+    ITEM_COUNT: 10,
   },
 };
 
