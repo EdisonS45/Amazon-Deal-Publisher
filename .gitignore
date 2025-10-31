@@ -2,8 +2,8 @@ node_modules
 
 .env
 
-/posters
+/backend/posters
 
-/exports
+/backend/exports
 
 /backend/app.log
