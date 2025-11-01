@@ -75,25 +75,22 @@ const cleanAndValidateProduct = (rawProduct, category) => {
       ASIN: asin,
       Title: rawProduct.ItemInfo.Title.DisplayValue,
       ProductURL: rawProduct.DetailPageURL,
-      ImageURL: rawProduct.Images?.Primary?.Large?.URL,
-
+      LowResImageURL: rawProduct.Images?.Primary?.Large?.URL,
       Price: currentPrice,
       OriginalPrice: originalPrice,
       Currency: currency,
-
       DiscountPercentage: discountPercentage,
       SavingsAmount: savingsAmount,
 
       Brand: brand,
       IsPrimeEligible: isPrimeEligible,
       Availability: availability,
-      RatingsCount: rawProduct.ratingsCount || 0,
-      StarRating: rawProduct.starRating || 0,
 
       Category: category,
       Marketplace: config.AMAZON.MARKETPLACE,
       LastUpdated: new Date(),
-      IsPosted: false,
+      status: 'PENDING_ENRICHMENT'
+
     };
   } catch (error) {
     logger.error(

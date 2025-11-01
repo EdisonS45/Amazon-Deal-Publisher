@@ -1,7 +1,8 @@
 import "dotenv/config";
 
 const config = {
-  TEST_MODE: false,
+  TEST_MODE: true,
+  NODE_ENV:process.env.NODE_ENV || 'development',
   MONGO_URI: process.env.MONGO_URI,
   REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
   CACHE_TTL_SECONDS: 6 * 60 * 60,

@@ -52,7 +52,7 @@ export const fetchDealsByCategory = async (
       logger.info(
         `Successfully fetched ${items.length} raw items for ${category}.`
       );
-      await setToCache(cacheKey, items, config.CACHE_TTL_SECONDS); // cache for 24 hours
+      await setToCache(cacheKey, items, config.CACHE_TTL_SECONDS); 
       return items;
     } catch (error) {
       logger.error(

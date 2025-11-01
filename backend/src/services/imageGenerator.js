@@ -5,11 +5,12 @@ import config from "../config/index.js";
 import logger from "../config/logger.js";
 import sharp from "sharp";
 
+const ai = new GoogleGenAI({
+  apiKey: config.GEMINI.API_KEY,
+});
+
 export const generatePosterImage = async (deal) => {
   try {
-    const ai = new GoogleGenAI({
-      apiKey: config.GEMINI.API_KEY,
-    });
 
     const imagePath = deal.ImageURL || deal.imageUrl;
     if (!imagePath) throw new Error("No product image URL found in deal");
@@ -32,33 +33,21 @@ export const generatePosterImage = async (deal) => {
     const prompt = `
 ---
 ### PERSONA & GOAL
-Act as a **Senior Promotional Designer at Amazon**. Your single objective is to create a "scroll-stopping" poster that is professional, trustworthy, and makes a customer want to buy *immediately*.
-
-### CORE TASK
-Design a high-conversion promotional poster for the attached product.
-
+Act as a **Senior Promotional Designer at Amazon**. Your single objective is to create a "scroll-stopping" poster...
+---
 ### REQUIRED TEXT (ABSOLUTE)
-**Crucial Instruction:** You *must* render the following text elements perfectly. Text must be 100% accurate, clearly legible, and have no spelling errors, extra words, or garbled/unreadable characters.
-
+...
 1.  **Headline:** Use this *exact* text: "${cleanTitle}"
-    *(If this text is still too long, intelligently shorten it, but keep the main product name.)*
-
-2.  **Discount Badge:** A bright, prominent badge showing *exactly* this text: "${deal.DiscountPercentage}% OFF"
-
-3.  **Current Price:** Show *exactly* this text: "${deal.Currency}${deal.Price}"
-
-4.  **Original Price:** Show *exactly* this text: "${deal.Currency}${deal.OriginalPrice}"
+2.  **Discount Badge:** *exactly* this text: "${deal.DiscountPercentage}% OFF"
+3.  **Current Price:** *exactly* this text: "${deal.Currency}${deal.Price}"
+4.  **Original Price:** *exactly* this text: "${deal.Currency}${deal.OriginalPrice}"
     *(This price MUST have a visible strikethrough.)*
-
-5.  **Call to Action:** A high-contrast button with the *exact* text: "Shop Now"
-
+5.  **Call to Action:** *exact* text: "Shop Now"
+---
 ### DESIGN STYLE
-- **Aesthetic:** Bright, clean, uncluttered. Use white space effectively, just like on an Amazon product page.
-- **Layout:** The product is the hero. The text must be perfectly legible.
-
+...
 ### NEGATIVE CONSTRAINTS
-- **DO NOT** include any other text, watermarks, links, or URLs.
-- **DO NOT** use any text that is not listed in the "REQUIRED TEXT" section.
+...
 `;
 
     const result = await ai.models.generateContent({
@@ -75,6 +64,7 @@ Design a high-conversion promotional poster for the attached product.
         },
       ],
     });
+    
 
     const parts =
       result?.response?.candidates?.[0]?.content?.parts ||
@@ -104,39 +94,24 @@ Design a high-conversion promotional poster for the attached product.
     if (!base64Image) {
       throw new Error("Gemini returned no image data (base64 empty)");
     }
-
     const fileExt = mimeType.split("/")[1] || "png";
     const fileName = `poster_${deal.ASIN}_${Date.now()}.${fileExt}`;
     const outputDir = path.join(process.cwd(), "posters");
-
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
-      logger.info(`[FS DEBUG] Created missing folder: ${outputDir}`);
     }
-
     const filePath = path.join(outputDir, fileName);
-
-    try {
-      await sharp(Buffer.from(base64Image, "base64"))
-        .jpeg({ quality: 90 })
-        .toFile(filePath);
-    } catch (convertError) {
-      logger.error(
-        `Failed to convert image to JPEG for ASIN ${deal.ASIN}: ${convertError.message}`
-      );
-      throw new Error(`Image conversion failed: ${convertError.message}`);
-    }
+    await sharp(Buffer.from(base64Image, "base64"))
+      .jpeg({ quality: 90 })
+      .toFile(filePath);
     if (!fs.existsSync(filePath)) {
-      logger.error(
-        `[FS ERROR] Expected file not found after write: ${filePath}`
-      );
       throw new Error("Image file write failed (no file found)");
     }
-
     logger.info(
       `✅ Image generated successfully for ASIN ${deal.ASIN} -> ${filePath}`
     );
     return filePath;
+
   } catch (err) {
     logger.error(
       `❌ Image generation failed for ASIN ${deal.ASIN}: ${err.message}`

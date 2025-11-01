@@ -1,11 +1,12 @@
 import cron from "node-cron";
 import config from "../config/index.js";
 import logger from "../config/logger.js";
-import {
-  fetchAndSaveDeals,
-  runPublishingPipeline,
-} from "../services/dealPipeline.js";
 import { sendEmail } from "../utils/emailService.js";
+
+import { fetchAndSaveDeals } from "../services/dealPipeline.js"; // Phase 1
+import { runEnrichmentPipeline } from "../services/enrichmentService.js"; // Phase 2
+import { runContentFactory } from "../services/contentFactory.js"; // Phase 3
+import { runScheduler } from "../services/schedulerService.js"; // Phase 4
 
 let isJobRunning = false;
 
@@ -40,16 +41,12 @@ const getStartEmailHtml = (startTimestamp, categories) => {
     <table cellpadding="0" cellspacing="0" style="${STYLES.wrapper}">
         <tr>
             <td style="${STYLES.header}">
-                <h2 style="${STYLES.h2} color: ${
-    COLORS.primary
-  };">🚀 Pipeline Job Started</h2>
+                <h2 style="${STYLES.h2} color: ${COLORS.primary};">🚀 V2 Pipeline Job Started</h2>
             </td>
         </tr>
         <tr>
             <td style="${STYLES.content}">
-                <p style="${
-                  STYLES.p
-                }">The deal fetching and publishing pipeline has commenced.</p>
+                <p style="${STYLES.p}">The 4-Phase deal pipeline has commenced.</p>
                 <table style="${STYLES.table}">
                     <tr>
                         <td style="${STYLES.tdKey}">Start Time</td>
@@ -57,9 +54,7 @@ const getStartEmailHtml = (startTimestamp, categories) => {
                     </tr>
                     <tr>
                         <td style="${STYLES.tdKey}">Categories</td>
-                        <td style="${STYLES.tdValue}">${categories.join(
-    ", "
-  )}</td>
+                        <td style="${STYLES.tdValue}">${categories.join(", ")}</td>
                     </tr>
                 </table>
             </td>
@@ -72,10 +67,7 @@ const getStartEmailHtml = (startTimestamp, categories) => {
 `;
 };
 
-const getSuccessEmailHtml = (summary, exportSummary, duration, categories) => {
-  const shortPath = exportSummary.csvPath
-    ? exportSummary.csvPath.split("/").pop()
-    : "N/A";
+const getSuccessEmailHtml = (summary, duration) => {
   return `
 <body style="${STYLES.body}">
     <table cellpadding="0" cellspacing="0" style="${STYLES.wrapper}">
@@ -83,50 +75,46 @@ const getSuccessEmailHtml = (summary, exportSummary, duration, categories) => {
             <td style="${STYLES.header}">
                 <h2 style="${STYLES.h2} color: ${
     COLORS.success
-  };">✅ Pipeline Completed Successfully</h2>
+  };">✅ V2 Pipeline Completed Successfully</h2>
             </td>
         </tr>
         <tr>
             <td style="${STYLES.content}">
-                <p style="${
-                  STYLES.p
-                }">The scheduled deal processing and export pipeline has finished.</p>
+                <p style="${STYLES.p}">The automated 4-phase pipeline has finished.</p>
+                
+                <h3 style="color: ${
+                  COLORS.dark
+                }; margin-top: 25px; margin-bottom: 10px;">📊 Final Summary</h3>
                 <table style="${STYLES.table}">
                     <tr>
-                        <td style="${STYLES.tdKey}">Duration</td>
+                        <td style="${STYLES.tdKey}">Total Duration</td>
                         <td style="${STYLES.tdValue}">${duration} seconds</td>
                     </tr>
                     <tr>
-                        <td style="${STYLES.tdKey}">Deals Saved/Updated</td>
+                        <td style="${STYLES.tdKey}">Phase 1: Deals Fetched</td>
                         <td style="${STYLES.tdValue}">${
-    summary.totalDealsSaved
+    summary.dealsFetched
   }</td>
                     </tr>
                     <tr>
-                        <td style="${STYLES.tdKey}">Deals Exported to CSV</td>
+                        <td style="${STYLES.tdKey}">Phase 2: Deals Enriched</td>
                         <td style="${STYLES.tdValue}">${
-    exportSummary.dealsExported
+    summary.dealsEnriched
+  }</td>
+                    </tr>
+                    <tr>
+                        <td style="${STYLES.tdKey}">Phase 3: Posts Generated</td>
+                        <td style="${STYLES.tdValue}">${
+    summary.postsGenerated
   }</td>
                     </tr>
                     <tr>
                         <td style="${
                           STYLES.tdKey
-                        }">Posts Scheduled (Publer)</td>
-                        <td style="${STYLES.tdValue}">${
-    exportSummary.dealsScheduled
-  }</td>
-                    </tr>
-                    <tr>
-                        <td style="${STYLES.tdKey}">CSV Filename</td>
-                        <td style="${STYLES.tdValue}">${shortPath}</td>
-                    </tr>
-                    <tr>
-                        <td style="${
-                          STYLES.tdKey
-                        } border-bottom: none;">Categories Processed</td>
+                        } border-bottom: none;">Phase 4: Posts Scheduled</td>
                         <td style="${
                           STYLES.tdValue
-                        } border-bottom: none;">${categories.join(", ")}</td>
+                        } border-bottom: none;">${summary.postsScheduled}</td>
                     </tr>
                 </table>
             </td>
@@ -138,14 +126,15 @@ const getSuccessEmailHtml = (summary, exportSummary, duration, categories) => {
 </body>
 `;
 };
-
 const getErrorEmailHtml = (error, duration, startTimestamp) => {
   return `
 <body style="${STYLES.body}">
     <table cellpadding="0" cellspacing="0" style="${STYLES.wrapper}">
         <tr>
             <td style="${STYLES.header}">
-                <h2 style="${STYLES.h2} color: ${COLORS.danger};">❌ Pipeline Job Failed</h2>
+                <h2 style="${STYLES.h2} color: ${
+    COLORS.danger
+  };">❌ V2 Pipeline Job Failed</h2>
             </td>
         </tr>
         <tr>
@@ -162,12 +151,24 @@ const getErrorEmailHtml = (error, duration, startTimestamp) => {
                     </tr>
                 </table>
                 <div style="margin-top: 25px;">
-                    <strong style="color: ${COLORS.dark};">Error Message:</strong>
-                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${COLORS.border}; color: ${COLORS.danger}; white-space: pre-wrap; word-wrap: break-word;">${error.message}</pre>
+                    <strong style="color: ${
+                      COLORS.dark
+                    };">Error Message:</strong>
+                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${
+    COLORS.border
+  }; color: ${
+    COLORS.danger
+  }; white-space: pre-wrap; word-wrap: break-word;">${error.message}</pre>
                 </div>
                 <div style="margin-top: 15px;">
                     <strong style="color: ${COLORS.dark};">Stack Trace:</strong>
-                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${COLORS.border}; color: ${COLORS.text}; white-space: pre-wrap; word-wrap: break-word; font-size: 12px;">${error.stack}</pre>
+                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${
+    COLORS.border
+  }; color: ${
+    COLORS.text
+  }; white-space: pre-wrap; word-wrap: break-word; font-size: 12px;">${
+    error.stack
+  }</pre>
                 </div>
             </td>
         </tr>
@@ -179,107 +180,121 @@ const getErrorEmailHtml = (error, duration, startTimestamp) => {
 `;
 };
 
-// --- CRON JOB ---
+export const runFullPipeline = async () => {
+  if (isJobRunning) {
+    logger.warn(
+      "CRON job skipped: Previous job is still running (overlap prevention active)."
+    );
+    return;
+  }
+  
+  logger.info("*** (V2) CRON JOB EXECUTION STARTED ***");
+  isJobRunning = true;
 
-export const startCronJob = () => {
+  const startTime = Date.now();
+  const startTimestamp = new Date().toLocaleString();
   const categoriesToFetch = config.AMAZON.CATEGORIES;
 
-  if (!categoriesToFetch || categoriesToFetch.length === 0) {
+  const finalSummary = {
+    dealsFetched: 0,
+    dealsEnriched: 0,
+    postsGenerated: 0,
+    postsScheduled: 0,
+  };
+
+  try {
+    const startHtmlContent = getStartEmailHtml(
+      startTimestamp,
+      categoriesToFetch
+    );
+    await sendEmail({
+      subject: "🚀 (V2) CRON Job Started: Deal Pipeline",
+      html: startHtmlContent,
+    });
+
+    logger.info("--- (PHASE 1) STARTING: fetchAndSaveDeals ---");
+    const phase1Summary = await fetchAndSaveDeals(categoriesToFetch);
+    finalSummary.dealsFetched = phase1Summary.totalDealsSaved;
+    logger.info("--- (PHASE 1) COMPLETE ---");
+
+    logger.info("--- (PHASE 2) STARTING: runEnrichmentPipeline ---");
+    const phase2Summary = await runEnrichmentPipeline(); 
+    finalSummary.dealsEnriched = phase2Summary.enrichedCount;
+    logger.info("--- (PHASE 2) COMPLETE ---");
+
+    logger.info("--- (PHASE 3) STARTING: runContentFactory ---");
+    const phase3Summary = await runContentFactory(); 
+    finalSummary.postsGenerated = phase3Summary.postsCreated;
+    logger.info("--- (PHASE 3) COMPLETE ---");
+    
+    logger.info("--- (PHASE 4) STARTING: runScheduler ---");
+    const phase4Summary = await runScheduler(); 
+    finalSummary.postsScheduled = phase4Summary.scheduledCount;
+    logger.info("--- (PHASE 4) COMPLETE ---");
+
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    logger.info(
+      `CRON Job finished successfully in ${duration}s. Summary: ${JSON.stringify(
+        finalSummary
+      )}`
+    );
+
+    const htmlContent = getSuccessEmailHtml(finalSummary, duration);
+    await sendEmail({
+      subject: "✅ (V2) CRON Job Completed: Deal Pipeline",
+      html: htmlContent,
+    });
+
+  } catch (error) {
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     logger.error(
-      "CRON Scheduler failed: No categories found in config.AMAZON.CATEGORIES. Aborting schedule setup."
+      `CRON Job critical failure after ${duration}s: ${error.message}`
+    );
+
+    const errorHtmlContent = getErrorEmailHtml(
+      error,
+      duration,
+      startTimestamp
+    );
+    await sendEmail({
+      subject: "❌ (V2) CRON Job Failed: Deal Pipeline",
+      html: errorHtmlContent,
+    });
+  } finally {
+    isJobRunning = false;
+    logger.info("*** (V2) CRON JOB EXECUTION FINISHED ***");
+  }
+};
+
+
+export const startCronJob = () => {
+  if (
+    !config.AMAZON.CATEGORIES ||
+    config.AMAZON.CATEGORIES.length === 0
+  ) {
+    logger.error(
+      "CRON Scheduler failed: No categories found. Aborting schedule."
     );
     return;
   }
 
   logger.info(
-    `Scheduling deal fetching job with cron expression: ${config.CRON_SCHEDULE}`
+    `Scheduling full V2 pipeline with cron expression: ${config.CRON_SCHEDULE}`
   );
-  logger.info(`Categories to be processed: ${categoriesToFetch.join(", ")}`);
 
   cron.schedule(
     config.CRON_SCHEDULE,
     async () => {
-      if (isJobRunning) {
-        logger.warn(
-          "CRON job skipped: Previous job is still running (overlap prevention active)."
-        );
-        return;
-      }
-
-      logger.info("*** CRON JOB EXECUTION STARTED ***");
-      isJobRunning = true;
-
-      const startTime = Date.now();
-      const startTimestamp = new Date().toLocaleString();
-      let summary = { totalDealsSaved: 0 };
-      let exportSummary = {
-        csvPath: "N/A",
-        dealsExported: 0,
-        dealsScheduled: 0,
-      };
-
-      try {
-        // 1. Send Start Email
-        const startHtmlContent = getStartEmailHtml(
-          startTimestamp,
-          categoriesToFetch
-        );
-        await sendEmail({
-          subject: "🚀 CRON Job Started: Deal Pipeline",
-          text: `Deal fetching job started at ${startTimestamp} for categories: ${categoriesToFetch.join(
-            ", "
-          )}`,
-          html: startHtmlContent,
-        });
-
-        // 2. Run Pipeline
-        summary = await fetchAndSaveDeals(categoriesToFetch);
-        exportSummary = await runPublishingPipeline();
-
-        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-        logger.info(
-          `CRON Job finished successfully in ${duration}s. Summary: ${summary.totalDealsSaved} deals saved/updated.`
-        );
-
-        // 3. Send Success Email
-        const htmlContent = getSuccessEmailHtml(
-          summary,
-          exportSummary,
-          duration,
-          categoriesToFetch
-        );
-        await sendEmail({
-          subject: "✅ CRON Job Completed: Deal Pipeline",
-          text: `The CRON job completed successfully. Duration: ${duration}s. Saved/Updated Deals: ${summary.totalDealsSaved}.`,
-          html: htmlContent,
-        });
-      } catch (error) {
-        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-        logger.error(
-          `CRON Job critical failure after ${duration}s: ${error.message}`
-        );
-
-        // 4. Send Failure Email
-        const errorHtmlContent = getErrorEmailHtml(
-          error,
-          duration,
-          startTimestamp
-        );
-        await sendEmail({
-          subject: "❌ CRON Job Failed: Deal Pipeline",
-          text: `The CRON job failed after ${duration}s.\nError: ${
-            error.message
-          }\nTime: ${new Date().toLocaleString()}`,
-          html: errorHtmlContent,
-        });
-      } finally {
-        isJobRunning = false;
-        logger.info("*** CRON JOB EXECUTION FINISHED ***");
-      }
+      await runFullPipeline();
     },
     {
       scheduled: true,
       timezone: config.TIMEZONE || "UTC",
     }
   );
+
+  if (config.NODE_ENV === 'development') {
+    logger.info("DEVELOPMENT MODE: Running pipeline once on startup...");
+    runFullPipeline();
+  }
 };
