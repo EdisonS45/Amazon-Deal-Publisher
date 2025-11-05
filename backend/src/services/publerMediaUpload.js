@@ -2,94 +2,46 @@ import fs from "fs";
 import path from "path";
 import axios from "axios";
 import FormData from "form-data";
+import os from "os";
 import config from "../config/index.js";
 import logger from "../config/logger.js";
-import os from "os";
-const PUBLER_MEDIA_UPLOAD_URL = "https://app.publer.com/api/v1/media";
-export const uploadMediaToPubler = async (
-  imageUrl,
-  asin,
-  localFilePath = null
-) => {
-  if (!config.PUBLER.API_KEY) {
-    logger.error("Publer API key missing for media upload.");
-    return null;
-  }
 
-  let tempFilePath = localFilePath;
-  let fileWasDownloaded = false;
+const PUBLER_MEDIA_URL = "https://app.publer.com/api/v1/media";
+
+export const uploadMediaToPubler = async (imageUrl, id, localPath = null) => {
+  let temp = localPath; // move this line OUTSIDE try
   try {
-    logger.info(
-      `Uploading media for ASIN ${asin} (localFilePath: ${!!localFilePath})`
-    );
+    if (!config.PUBLER?.API_KEY) throw new Error("Missing Publer API key");
 
-    if (!localFilePath) {
-      if (!imageUrl) {
-        logger.error(
-          "No image URL provided and no local file path. Aborting upload."
-        );
-        return null;
-      }
-
-      const response = await fetch(imageUrl);
-      if (!response.ok)
-        throw new Error(`Failed to download image from URL: ${imageUrl}`);
-      const buffer = await response.arrayBuffer();
-      const tempDir = config.TEMP_PATH || os.tmpdir();
-      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
-      const fileName = `temp_${asin}_${Date.now()}.jpg`;
-      tempFilePath = path.join(tempDir, fileName);
-      fs.writeFileSync(tempFilePath, Buffer.from(buffer));
-      fileWasDownloaded = true;
+    if (!temp) {
+      const res = await axios.get(imageUrl, { responseType: "arraybuffer" });
+      const ext = (res.headers["content-type"] || "image/jpeg").split("/")[1];
+      const fName = `temp_${id}_${Date.now()}.${ext}`;
+      temp = path.join(os.tmpdir(), fName);
+      fs.writeFileSync(temp, res.data);
     }
 
-    const formData = new FormData();
-    formData.append("file", fs.createReadStream(tempFilePath));
-    formData.append("direct_upload", "true");
-    formData.append("in_library", "false");
+    const form = new FormData();
+    form.append("file", fs.createReadStream(temp));
+    form.append("direct_upload", "true");
+    form.append("in_library", "false");
 
-    const uploadResponse = await axios.post(PUBLER_MEDIA_UPLOAD_URL, formData, {
+    const res = await axios.post(PUBLER_MEDIA_URL, form, {
       headers: {
         Authorization: `Bearer-API ${config.PUBLER.API_KEY}`,
         "Publer-Workspace-Id": config.PUBLER.WORKSPACE_ID,
-        Accept: "*/*",
-        ...formData.getHeaders(),
+        ...form.getHeaders(),
       },
     });
 
-    const mediaId = uploadResponse.data.id;
-    if (mediaId) {
-      logger.info(`Publer media uploaded for ASIN ${asin}: ${mediaId}`);
-      return mediaId;
-    } else {
-      logger.error(
-        `Publer uploaded but no media id returned. Response: ${JSON.stringify(
-          uploadResponse.data
-        )}`
-      );
-      return null;
-    }
-  } catch (error) {
-    logger.error(
-      `Publer Media Upload Error for ASIN ${asin}: ${error.message}`
-    );
-    if (error.response?.data) {
-      logger.error(
-        `Publer API Response: ${JSON.stringify(error.response.data)}`
-      );
-    }
+    const idOut = res.data?.id;
+    if (!idOut) throw new Error("No media ID returned");
+    logger.info(`Uploaded media to Publer -> ${idOut}`);
+    return idOut;
+  } catch (e) {
+    logger.error(`Publer upload error for ${id}: ${e.message}`);
     return null;
   } finally {
-    if (fileWasDownloaded && tempFilePath && fs.existsSync(tempFilePath)) {
-      try {
-        fs.unlinkSync(tempFilePath);
-        logger.info(`Cleaned up temp file: ${tempFilePath}`);
-      } catch (cleanupError) {
-        logger.error(
-          `Failed to cleanup temp file: ${tempFilePath}: ${cleanupError.message}`
-        );
-      }
-    }
+    if (!localPath && fs.existsSync(temp)) fs.unlinkSync(temp);
   }
 };
