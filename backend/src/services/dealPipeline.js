@@ -1,4 +1,3 @@
-// src/services/dealPipeline.js
 import { fetchDealsByCategory } from "./amazonScraper.js";
 import { processRawDeals } from "./dataCleaner.js";
 import Product from "../models/Product.js";
@@ -14,9 +13,6 @@ import pLimit from "p-limit";
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
-/**
- * Fetch and upsert deals (sequential per-category, careful with PA-API limits)
- */
 export const fetchAndSaveDeals = async (
   categories = config.AMAZON?.CATEGORIES
 ) => {
@@ -66,7 +62,6 @@ export const fetchAndSaveDeals = async (
           logger.warn(`⚠️ No valid deals found in category: ${category}`);
           perCategoryResults.push(0);
         } else {
-          // Build bulk ops using $set (safer)
           const bulkOperations = cleanedDeals.map((deal) => ({
             updateOne: {
               filter: { ASIN: deal.ASIN },
@@ -80,7 +75,6 @@ export const fetchAndSaveDeals = async (
               ordered: false,
             });
 
-            // Different mongoose versions report different fields; defensively compute success
             const upserted = result?.upsertedCount ?? result?.nUpserted ?? 0;
             const modified = result?.modifiedCount ?? result?.nModified ?? 0;
             const savedCount = upserted + modified;
@@ -94,7 +88,6 @@ export const fetchAndSaveDeals = async (
                 bulkErr?.message || bulkErr
               }. Attempting per-item upsert fallback.`
             );
-            // fallback: upsert one-by-one
             let fallbackSaved = 0;
             for (const deal of cleanedDeals) {
               try {
@@ -111,7 +104,6 @@ export const fetchAndSaveDeals = async (
                   }`
                 );
               }
-              // tiny delay so DB is not hammered
               await sleep(15);
             }
             logger.info(
@@ -133,7 +125,6 @@ export const fetchAndSaveDeals = async (
       0
     );
 
-    // early abort if many categories disabled
     if (disabledCount / Math.max(1, categoryList.length) >= MAX_DISABLED_RATIO) {
       logger.error(
         `Aborting fetch: ${disabledCount} of ${categoryList.length} categories returned no items (ratio >= ${MAX_DISABLED_RATIO}).`
@@ -143,7 +134,7 @@ export const fetchAndSaveDeals = async (
 
     const jitter = Math.floor(Math.random() * 300);
     await sleep(CATEGORY_DELAY_MS + jitter);
-  } // end categories loop
+  } 
 
   totalDealsSaved = perCategoryResults.reduce(
     (sum, v) => sum + (Number(v) || 0),
@@ -157,9 +148,6 @@ export const fetchAndSaveDeals = async (
   return { totalDealsProcessed, totalDealsSaved };
 };
 
-/**
- * Read up to `limit` unposted deals ready for publishing
- */
 export const getDealsForExport = async (limit = 400) => {
   logger.info(`Fetching up to ${limit} unposted deals from the database.`);
   try {
@@ -174,10 +162,6 @@ export const getDealsForExport = async (limit = 400) => {
     return [];
   }
 };
-
-/**
- * Grouping & scheduling helpers
- */
 
 const makePriceBand = (price) => {
   if (!price && price !== 0) return "0-499";
@@ -234,29 +218,21 @@ export const createGroupsFromDeals = (deals, maxGroups = 50, groupSize = 4) => {
   return groups.slice(0, maxGroups);
 };
 
-/**
- * Build a caption for a group that includes links for every product.
- * If generateSocialCaption supports group objects it will be used; otherwise this helper returns a robust fallback.
- */
 const buildCaptionForGroup = (group) => {
   try {
-    // Try user-provided generator first (in case you've implemented group support)
     const gen = generateSocialCaption(group);
     if (typeof gen === "string" && gen.trim().length > 0) return gen;
   } catch (e) {
-    // fall through to fallback builder
   }
 
-  // Fallback: human-readable enumerated caption listing all items + combined Shop list
   const header = `🔥 ${group.title.toUpperCase()} 🔥\n\n`;
   const itemsText = group.items
     .map((it, idx) => {
       const price = it.Currency ? `${it.Currency}${it.Price}` : `${it.Price}`;
       return `${idx + 1}. ${it.Title} — ${it.DiscountPercentage || 0}% off — ${price}`;
     })
-    .join("\n");
+    .join("\n\n");
 
-  // Include all product links so users can click any of the 4
   const allLinks = group.items
     .map((it) => `${it.ProductURL || ""}`)
     .filter(Boolean)
@@ -269,19 +245,18 @@ const buildCaptionForGroup = (group) => {
   return `${header}${itemsText}${shopBlock}${tags}`;
 };
 
-/**
- * scheduleSocialPosts now accepts an array of groups (each group can contain N items).
- */
 export const scheduleSocialPosts = async (groupsToPublish) => {
   logger.info(`Starting social media scheduling for ${groupsToPublish.length} groups.`);
 
   let scheduledCount = 0;
   const postIntervalMs = (config.PUBLISHING?.POST_INTERVAL_MINUTES || 5) * 60 * 1000;
   const baseTime = new Date(Date.now() + postIntervalMs);
-  let generationCount = 0;
 
-  // Respect daily Gemini generation cap (env var or config)
-  const GEMINI_DAILY_CAP = config.GEMINI?.DAILY_IMAGE_CAP ?? config.GEMINI?.MAX_GENERATIONS_PER_RUN ?? 10;
+  let generationCount = 0;
+  const GEMINI_DAILY_CAP =
+    config.PUBLISHING?.MAX_DAILY_GROUPS_WITH_GEMINI ||
+    config.IMAGE_DECISION?.MAX_GENERATIONS_PER_RUN ||
+    10;
 
   for (let i = 0; i < groupsToPublish.length; i++) {
     const group = groupsToPublish[i];
@@ -296,45 +271,68 @@ export const scheduleSocialPosts = async (groupsToPublish) => {
       continue;
     }
 
-    let publerMediaId = null;
+    let posterLocalPath = null;
     try {
       const doGenerate = shouldGenerateImage(group, generationCount);
       if (doGenerate && generationCount < GEMINI_DAILY_CAP) {
         logger.info(`Decision: Generate custom image for group ${group.id}`);
-        const localImagePath = await generatePosterImage(group);
-        if (localImagePath) {
-          generationCount++;
-          publerMediaId = await uploadMediaToPubler(null, group.id, localImagePath);
-        } else {
-          logger.warn(`Image generation failed for group ${group.id}; falling back to Amazon images.`);
-          publerMediaId = await uploadMediaToPubler(repImageUrl, group.id);
+        try {
+          posterLocalPath = await generatePosterImage(group);
+          if (posterLocalPath) {
+            generationCount++;
+            logger.info(`Generated poster for group ${group.id}: ${posterLocalPath}`);
+          } else {
+            logger.warn(`generatePosterImage returned null for group ${group.id}`);
+          }
+        } catch (gErr) {
+          logger.warn(`Poster generation failed for group ${group.id}: ${gErr?.message || gErr}`);
+          posterLocalPath = null;
         }
-      } else {
-        // generate disabled or cap reached -> upload rep image
-        publerMediaId = await uploadMediaToPubler(repImageUrl, group.id);
       }
-
-      if (config.TEST_MODE && generationCount >= 3) {
-        logger.warn("🧪 TEST_MODE: Gemini image generation capped at 3 calls for safety.");
-      }
-    } catch (uploadError) {
-      logger.error(`Failed to upload media for group ${group.id}: ${uploadError?.message || uploadError}`);
-      continue;
+    } catch (err) {
+      logger.debug(`Error in image decision for group ${group.id}: ${err?.message || err}`);
+      posterLocalPath = null;
     }
 
-    if (!publerMediaId) {
-      logger.warn(`Could not retrieve Publer Media ID for group ${group.id}. Skipping.`);
+    const productImageInputs = [];
+    for (const it of group.items) {
+      if (it.LocalImagePath) productImageInputs.push(it.LocalImagePath);
+      else if (it.ImageURL) productImageInputs.push(it.ImageURL);
+    }
+
+    const uploadInputs = [];
+    if (posterLocalPath) uploadInputs.push(posterLocalPath);
+    const uniqProdImgs = [...new Set(productImageInputs)].slice(0, 4);
+    uploadInputs.push(...uniqProdImgs);
+
+    if (uploadInputs.length === 0 && repImageUrl) uploadInputs.push(repImageUrl);
+
+    let publerMediaResult = null;
+    try {
+      publerMediaResult = await uploadMediaToPubler(uploadInputs, group.id);
+    } catch (err) {
+      logger.error(`Failed to upload media for group ${group.id}: ${err?.message || err}`);
+      publerMediaResult = null;
+    }
+
+    if (!publerMediaResult || (Array.isArray(publerMediaResult) && publerMediaResult.length === 0)) {
+      logger.warn(`No media IDs returned for group ${group.id}. Skipping scheduling.`);
       continue;
     }
 
     const scheduleTime = new Date(baseTime.getTime() + i * postIntervalMs);
 
-    const caption = buildCaptionForGroup(group);
+    let caption = null;
+    try {
+      caption = buildCaptionForGroup(group);
+    } catch (e) {
+      logger.warn(`Caption build failed for group ${group.id}: ${e?.message || e}`);
+      caption = `Top ${group.items.length} ${group.category || "Deals"}`;
+    }
 
-    // publish group post
     let publerResponse = null;
     try {
-      publerResponse = await publishDealToPubler(group, caption, scheduleTime, publerMediaId);
+      publerResponse = await publishDealToPubler(group, caption, scheduleTime, publerMediaResult);
     } catch (err) {
       logger.error(`Failed to publish group ${group.id} to Publer: ${err?.message || err}`);
       publerResponse = null;
@@ -343,12 +341,10 @@ export const scheduleSocialPosts = async (groupsToPublish) => {
     if (publerResponse) {
       scheduledCount++;
 
-      // determine stored job id from response (defensive)
       const publerJobId =
         (publerResponse && (publerResponse.job_id || publerResponse.id || (publerResponse.data && publerResponse.data.job_id))) ||
         null;
 
-      // mark each item in group as posted
       try {
         const bulkUpdates = group.items.map((it) => ({
           updateOne: {
@@ -379,19 +375,12 @@ export const scheduleSocialPosts = async (groupsToPublish) => {
     } else {
       logger.warn(`Failed to schedule group ${group.id}. Skipping DB update.`);
     }
-  }
+  } 
 
   logger.info(`Social Media Scheduling Complete. Total groups scheduled: ${scheduledCount}.`);
   return scheduledCount;
 };
 
-/**
- * runPublishingPipeline:
- *  - fetch up to X unposted deals
- *  - create groups
- *  - export csv
- *  - schedule social posts
- */
 export const runPublishingPipeline = async () => {
   logger.info("--- PUBLISHING & EXPORT PIPELINE STARTED ---");
 
@@ -443,4 +432,12 @@ export const runPublishingPipeline = async () => {
     dealsExported: dealsToProcess.length,
     dealsScheduled: groupsScheduled,
   };
+};
+
+export default {
+  fetchAndSaveDeals,
+  getDealsForExport,
+  createGroupsFromDeals,
+  scheduleSocialPosts,
+  runPublishingPipeline,
 };

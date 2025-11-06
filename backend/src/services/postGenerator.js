@@ -1,31 +1,24 @@
-// src/services/postGenerator.js
 import logger from "../config/logger.js";
 
-/**
- * Utility: clean and shorten product titles for readability.
- * Removes marketing phrases like "with", "for", "True Wireless", "Bluetooth", etc.
- */
-const cleanTitle = (title = "") => {
-  try {
-    let short = title.split(/[-,|:]/)[0].trim(); // take before - , | :
-    // remove redundant marketing words
-    short = short
-      .replace(/\b(True Wireless|Bluetooth|Earbuds?|Headphones?|with Mic|with|Fast Charge|Charging|Smart|Portable|Wireless|TWS|Edition)\b/gi, "")
-      .replace(/\s{2,}/g, " ") // collapse multiple spaces
-      .trim();
+const stripParenthesis = (s) => (s || "").replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "");
+const takeFirstWords = (s, n = 6) =>
+  (s || "")
+    .split(/\s+/)
+    .slice(0, n)
+    .join(" ")
+    .replace(/[,:;]+$/g, "")
+    .trim();
 
-    // capitalise first letter if missing
-    return short.charAt(0).toUpperCase() + short.slice(1);
-  } catch (e) {
-    return title;
-  }
+const makeShortTitle = (fullTitle) => {
+  if (!fullTitle) return "";
+  let t = stripParenthesis(fullTitle);
+  t = t.replace(/\s{2,}/g, " ").trim();
+  const short = takeFirstWords(t, 6);
+  return short.length < fullTitle.length ? short : fullTitle.slice(0, 100);
 };
 
-/**
- * generateSocialCaption supports both:
- * - single deal (has ASIN)
- * - group { id, title, items: [...] }
- */
+const safe = (v) => (v === undefined || v === null ? "" : String(v));
+
 export const generateSocialCaption = (productOrGroup) => {
   if (!productOrGroup) {
     logger.error("Null input to generateSocialCaption");
@@ -34,7 +27,6 @@ export const generateSocialCaption = (productOrGroup) => {
 
   const isGroup = !!(productOrGroup && Array.isArray(productOrGroup.items));
 
-  // ---------- SINGLE PRODUCT ----------
   if (!isGroup) {
     const {
       Title,
@@ -44,6 +36,10 @@ export const generateSocialCaption = (productOrGroup) => {
       DiscountPercentage,
       ProductURL,
       Category,
+      Features,
+      SalesRank,
+      RatingsCount,
+      StarRating,
     } = productOrGroup;
 
     if (!Title || !Price || !OriginalPrice || !Currency || !DiscountPercentage || !ProductURL) {
@@ -51,65 +47,76 @@ export const generateSocialCaption = (productOrGroup) => {
       return null;
     }
 
-    const cleanName = cleanTitle(Title);
-    const discountText = `${DiscountPercentage}% OFF`;
-    const priceText = `${Currency}${Price}`;
-    const originalText = `${Currency}${OriginalPrice}`;
-    const savings = Math.floor(OriginalPrice - Price);
+    const numericPrice = Math.floor(Number(Price) || 0);
+    const numericOriginalPrice = Math.floor(Number(OriginalPrice) || 0);
+    const savings = Math.max(0, numericOriginalPrice - numericPrice);
+    const formattedPrice = `${Currency}${numericPrice}`;
+    const formattedOriginalPrice = `${Currency}${numericOriginalPrice}`;
 
+    const shortTitle = makeShortTitle(Title);
     const categoryTag = (Category || "AmazonFinds").replace(/[^A-Za-z0-9]/g, "");
 
+    let featureLine = "";
+    if (Array.isArray(Features) && Features.length > 0) {
+      featureLine = `• ${Features[0].slice(0, 120)}${Features[0].length > 120 ? "..." : ""}\n\n`;
+    }
+
+    const rankLine = SalesRank ? `🏆 Rank: ${SalesRank}\n` : "";
+    const ratingLine = RatingsCount ? `⭐ ${StarRating || "N/A"} (${RatingsCount})\n` : "";
+
+    const template = `
+🔥 ${DiscountPercentage}% OFF
+
+${shortTitle}
+
+${featureLine}${rankLine}${ratingLine}
+💰 ${formattedPrice} (Was ${formattedOriginalPrice})
+💸 You Save: ${Currency}${savings}
+
+Buy now:
+🛒 ${ProductURL}
+
+#AmazonDeal #${categoryTag} #Deal
+`.trim();
+
+    return template;
+  } else {
+    const group = productOrGroup;
+    const items = group.items || [];
+    if (items.length === 0) {
+      logger.error("Group contains no items for caption");
+      return null;
+    }
+
+    const maxPrice = Math.max(...items.map((it) => Number(it.Price || 0)));
+    const headlineCategory = group.category || items[0]?.Category || "Deals";
+    const headline = `Top ${items.length} ${headlineCategory} Deals under ${items[0]?.Currency || ""}${maxPrice}`;
+
+    const bullets = items
+      .slice(0, 10)
+      .map((it, idx) => {
+        const short = makeShortTitle(it.Title || "");
+        const price = `${it.Currency || ""}${it.Price || ""}`;
+        const disc = `${it.DiscountPercentage || 0}%`;
+        const link = safe(it.ProductURL) || "";
+        return `${idx + 1}. ${short} — ${disc} — ${price}${link ? `\n🔗 ${link}` : ""}`;
+      })
+      .join("\n\n");
+
+    const firstFeatures = (items[0]?.Features || [])[0];
+    const featureLine = firstFeatures ? `• ${firstFeatures.slice(0, 140)}${firstFeatures.length > 140 ? "..." : ""}\n\n` : "";
+
+    const ctaUrl = items[0]?.ProductURL || "";
+
     const caption = `
-🔥 ${discountText}! 🔥
+${headline}
 
-${cleanName}
-💰 ${priceText}  ~${originalText}~ 
-💸 Save ${Currency}${savings}
+${featureLine}${bullets}
 
-🛒 Buy now: ${ProductURL}
-
-#${categoryTag} #AmazonDeals #Sale
-    `.trim();
+#AmazonDeals #TopPicks #AmazonOffers
+`.trim();
 
     return caption;
   }
-
-  // ---------- GROUP POST ----------
-  const group = productOrGroup;
-  const items = group.items || [];
-  if (items.length === 0) {
-    logger.error("Group contains no items for caption");
-    return null;
-  }
-
-  const category = (group.category || items[0]?.Category || "Deals").replace(/[^A-Za-z0-9]/g, "");
-  const topBadge = `🔥 Top ${items.length} ${category} Deals 🔥`;
-  const titleLine = group.title ? `${group.title}\n\n` : "";
-
-  // Short list (name + discount + price)
-  const bullets = items.slice(0, 5).map((it, idx) => {
-    const name = cleanTitle(it.Title);
-    const price = `${it.Currency || ""}${it.Price || ""}`;
-    const disc = `${it.DiscountPercentage || 0}%`;
-    return `${idx + 1}️⃣ ${name} — ${disc} off — ${price}`;
-  }).join("\n");
-
-  // Add all available URLs
-  const links = items.slice(0, 5).map((it, idx) => {
-    if (!it.ProductURL) return null;
-    return `${idx + 1}️⃣ ${it.ProductURL}`;
-  }).filter(Boolean).join("\n");
-
-  const caption = `
-${topBadge}
-
-${titleLine}${bullets}
-
-🛒 Shop all deals 👇
-${links}
-
-#AmazonDeals #TopPicks #${category}
-  `.trim();
-
-  return caption;
 };
+export default generateSocialCaption;

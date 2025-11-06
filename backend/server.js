@@ -4,9 +4,8 @@ import connectDB from "./src/config/db.js";
 import { startCronJob } from "./src/cron/jobScheduler.js";
 import logger from "./src/config/logger.js";
 
-import "./src/services/redisClient.js"; // initialize redis client early
+import "./src/services/redisClient.js"; 
 
-// mount preview route (we created this earlier)
 import postPreviewRouter from "./src/services/postPreview.js";
 
 const PORT = process.env.PORT || 3000;
@@ -14,17 +13,13 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 
 async function main() {
   try {
-    // connect to DB (connectDB should return a promise)
     await connectDB();
 
-    // create express app
     const app = express();
 
-    // middleware
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 
-    // health endpoint
     app.get("/health", (req, res) => {
       const dbStates = ["disconnected", "connected", "connecting", "disconnecting"];
       const dbState = dbStates[mongoose.connection.readyState] || "unknown";
@@ -39,13 +34,10 @@ async function main() {
       });
     });
 
-    // mount preview route for manual QA
     app.use("/api/preview", postPreviewRouter);
 
-    // start cron AFTER DB ready
     startCronJob();
 
-    // start HTTP server
     app.listen(PORT, () => {
       logger.info("----------------------------------------------------");
       logger.info(`🚀 Server running in ${NODE_ENV} mode on port ${PORT}`);

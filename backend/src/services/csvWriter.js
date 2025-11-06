@@ -1,7 +1,7 @@
 import { createObjectCsvWriter } from "csv-writer";
 import path from "path";
 import logger from "../config/logger.js";
-import fs from "fs/promises"; // Used for async folder creation
+import fs from "fs/promises"; 
 
 const CSV_HEADERS = [
     { id: "ASIN", title: "ASIN" },

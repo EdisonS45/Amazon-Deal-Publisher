@@ -7,11 +7,6 @@ import logger from "../config/logger.js";
 
 const router = express.Router();
 
-/**
- * POST /api/preview/post
- * Body:
- *  { asin: "B0..." }  OR  { asins: ["B0..","B0.."], groupTitle: "Top 4 Deals" }
- */
 router.post("/post", async (req, res) => {
   try {
     const { asin, asins, groupTitle } = req.body;

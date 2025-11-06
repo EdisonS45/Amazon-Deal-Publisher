@@ -17,10 +17,6 @@ const VISUAL_CATEGORIES = [
 
 const safeNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
 
-/**
- * Decides whether to generate an AI poster or use a direct image.
- * Works for single product or multi-item group.
- */
 export const shouldGenerateImage = (itemOrGroup, generatedCount = 0) => {
   if (generatedCount >= config.IMAGE_DECISION.MAX_GENERATIONS_PER_RUN) return false;
 
