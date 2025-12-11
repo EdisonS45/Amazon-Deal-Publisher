@@ -21,7 +21,7 @@ async function main() {
     app.use(express.urlencoded({ extended: true }));
 
     app.get("/health", (req, res) => {
-      const dbStates = ["disconnected", "connected", "connecting", "disconnecting"];
+      const dbStates = ["disconnected", "connected", "connecting", "disconnecting","uninitialized"];
       const dbState = dbStates[mongoose.connection.readyState] || "unknown";
       res.status(200).json({
         status: "ok",
