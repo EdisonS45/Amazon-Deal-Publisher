@@ -40,16 +40,12 @@ const getStartEmailHtml = (startTimestamp, categories) => {
     <table cellpadding="0" cellspacing="0" style="${STYLES.wrapper}">
         <tr>
             <td style="${STYLES.header}">
-                <h2 style="${STYLES.h2} color: ${
-    COLORS.primary
-  };">🚀 Pipeline Job Started</h2>
+                <h2 style="${STYLES.h2} color: ${COLORS.primary};">🚀 Pipeline Job Started</h2>
             </td>
         </tr>
         <tr>
             <td style="${STYLES.content}">
-                <p style="${
-                  STYLES.p
-                }">The deal fetching and publishing pipeline has commenced.</p>
+                <p style="${STYLES.p}">The deal fetching and publishing pipeline has commenced.</p>
                 <table style="${STYLES.table}">
                     <tr>
                         <td style="${STYLES.tdKey}">Start Time</td>
@@ -57,9 +53,7 @@ const getStartEmailHtml = (startTimestamp, categories) => {
                     </tr>
                     <tr>
                         <td style="${STYLES.tdKey}">Categories</td>
-                        <td style="${STYLES.tdValue}">${categories.join(
-    ", "
-  )}</td>
+                        <td style="${STYLES.tdValue}">${(categories || []).join(", ")}</td>
                     </tr>
                 </table>
             </td>
@@ -73,24 +67,18 @@ const getStartEmailHtml = (startTimestamp, categories) => {
 };
 
 const getSuccessEmailHtml = (summary, exportSummary, duration, categories) => {
-  const shortPath = exportSummary.csvPath
-    ? exportSummary.csvPath.split("/").pop()
-    : "N/A";
+  const shortPath = exportSummary.csvPath ? exportSummary.csvPath.split("/").pop() : "N/A";
   return `
 <body style="${STYLES.body}">
     <table cellpadding="0" cellspacing="0" style="${STYLES.wrapper}">
         <tr>
             <td style="${STYLES.header}">
-                <h2 style="${STYLES.h2} color: ${
-    COLORS.success
-  };">✅ Pipeline Completed Successfully</h2>
+                <h2 style="${STYLES.h2} color: ${COLORS.success};">✅ Pipeline Completed Successfully</h2>
             </td>
         </tr>
         <tr>
             <td style="${STYLES.content}">
-                <p style="${
-                  STYLES.p
-                }">The scheduled deal processing and export pipeline has finished.</p>
+                <p style="${STYLES.p}">The scheduled deal processing and export pipeline has finished.</p>
                 <table style="${STYLES.table}">
                     <tr>
                         <td style="${STYLES.tdKey}">Duration</td>
@@ -98,35 +86,23 @@ const getSuccessEmailHtml = (summary, exportSummary, duration, categories) => {
                     </tr>
                     <tr>
                         <td style="${STYLES.tdKey}">Deals Saved/Updated</td>
-                        <td style="${STYLES.tdValue}">${
-    summary.totalDealsSaved
-  }</td>
+                        <td style="${STYLES.tdValue}">${summary.totalDealsSaved}</td>
                     </tr>
                     <tr>
                         <td style="${STYLES.tdKey}">Deals Exported to CSV</td>
-                        <td style="${STYLES.tdValue}">${
-    exportSummary.dealsExported
-  }</td>
+                        <td style="${STYLES.tdValue}">${exportSummary.dealsExported}</td>
                     </tr>
                     <tr>
-                        <td style="${
-                          STYLES.tdKey
-                        }">Posts Scheduled (Publer)</td>
-                        <td style="${STYLES.tdValue}">${
-    exportSummary.dealsScheduled
-  }</td>
+                        <td style="${STYLES.tdKey}">Posts Scheduled (Publer)</td>
+                        <td style="${STYLES.tdValue}">${exportSummary.dealsScheduled}</td>
                     </tr>
                     <tr>
                         <td style="${STYLES.tdKey}">CSV Filename</td>
                         <td style="${STYLES.tdValue}">${shortPath}</td>
                     </tr>
                     <tr>
-                        <td style="${
-                          STYLES.tdKey
-                        } border-bottom: none;">Categories Processed</td>
-                        <td style="${
-                          STYLES.tdValue
-                        } border-bottom: none;">${categories.join(", ")}</td>
+                        <td style="${STYLES.tdKey} border-bottom: none;">Categories Processed</td>
+                        <td style="${STYLES.tdValue} border-bottom: none;">${(categories || []).join(", ")}</td>
                     </tr>
                 </table>
             </td>
@@ -163,11 +139,11 @@ const getErrorEmailHtml = (error, duration, startTimestamp) => {
                 </table>
                 <div style="margin-top: 25px;">
                     <strong style="color: ${COLORS.dark};">Error Message:</strong>
-                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${COLORS.border}; color: ${COLORS.danger}; white-space: pre-wrap; word-wrap: break-word;">${error.message}</pre>
+                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${COLORS.border}; color: ${COLORS.danger}; white-space: pre-wrap; word-wrap: break-word;">${error?.message || "Unknown error"}</pre>
                 </div>
                 <div style="margin-top: 15px;">
                     <strong style="color: ${COLORS.dark};">Stack Trace:</strong>
-                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${COLORS.border}; color: ${COLORS.text}; white-space: pre-wrap; word-wrap: break-word; font-size: 12px;">${error.stack}</pre>
+                    <pre style="background-color: ${COLORS.bg}; padding: 15px; border-radius: 4px; border: 1px solid ${COLORS.border}; color: ${COLORS.text}; white-space: pre-wrap; word-wrap: break-word; font-size: 12px;">${error?.stack || "No stack available"}</pre>
                 </div>
             </td>
         </tr>
@@ -180,29 +156,27 @@ const getErrorEmailHtml = (error, duration, startTimestamp) => {
 };
 
 // --- CRON JOB ---
-
 export const startCronJob = () => {
-  const categoriesToFetch = config.AMAZON.CATEGORIES;
+  const categoriesToFetch = config.AMAZON?.CATEGORIES || [];
 
   if (!categoriesToFetch || categoriesToFetch.length === 0) {
-    logger.error(
-      "CRON Scheduler failed: No categories found in config.AMAZON.CATEGORIES. Aborting schedule setup."
-    );
+    logger.error("CRON Scheduler failed: No categories found in config.AMAZON.CATEGORIES. Aborting schedule setup.");
     return;
   }
 
-  logger.info(
-    `Scheduling deal fetching job with cron expression: ${config.CRON_SCHEDULE}`
-  );
-  logger.info(`Categories to be processed: ${categoriesToFetch.join(", ")}`);
+  if (!config.CRON_SCHEDULE) {
+    logger.error("CRON Scheduler failed: No cron expression configured in config.CRON_SCHEDULE. Aborting schedule setup.");
+    return;
+  }
+
+  logger.info(`Scheduling deal fetching job with cron expression: ${config.CRON_SCHEDULE}`);
+  logger.info(`Categories to be processed: ${(categoriesToFetch || []).join(", ")}`);
 
   cron.schedule(
     config.CRON_SCHEDULE,
     async () => {
       if (isJobRunning) {
-        logger.warn(
-          "CRON job skipped: Previous job is still running (overlap prevention active)."
-        );
+        logger.warn("CRON job skipped: Previous job is still running (overlap prevention active).");
         return;
       }
 
@@ -220,15 +194,10 @@ export const startCronJob = () => {
 
       try {
         // 1. Send Start Email
-        const startHtmlContent = getStartEmailHtml(
-          startTimestamp,
-          categoriesToFetch
-        );
+        const startHtmlContent = getStartEmailHtml(startTimestamp, categoriesToFetch);
         await sendEmail({
           subject: "🚀 CRON Job Started: Deal Pipeline",
-          text: `Deal fetching job started at ${startTimestamp} for categories: ${categoriesToFetch.join(
-            ", "
-          )}`,
+          text: `Deal fetching job started at ${startTimestamp} for categories: ${(categoriesToFetch || []).join(", ")}`,
           html: startHtmlContent,
         });
 
@@ -237,17 +206,10 @@ export const startCronJob = () => {
         exportSummary = await runPublishingPipeline();
 
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-        logger.info(
-          `CRON Job finished successfully in ${duration}s. Summary: ${summary.totalDealsSaved} deals saved/updated.`
-        );
+        logger.info(`CRON Job finished successfully in ${duration}s. Summary: ${summary.totalDealsSaved} deals saved/updated.`);
 
         // 3. Send Success Email
-        const htmlContent = getSuccessEmailHtml(
-          summary,
-          exportSummary,
-          duration,
-          categoriesToFetch
-        );
+        const htmlContent = getSuccessEmailHtml(summary, exportSummary, duration, categoriesToFetch);
         await sendEmail({
           subject: "✅ CRON Job Completed: Deal Pipeline",
           text: `The CRON job completed successfully. Duration: ${duration}s. Saved/Updated Deals: ${summary.totalDealsSaved}.`,
@@ -255,21 +217,13 @@ export const startCronJob = () => {
         });
       } catch (error) {
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-        logger.error(
-          `CRON Job critical failure after ${duration}s: ${error.message}`
-        );
+        logger.error(`CRON Job critical failure after ${duration}s: ${error?.message || error}`);
 
         // 4. Send Failure Email
-        const errorHtmlContent = getErrorEmailHtml(
-          error,
-          duration,
-          startTimestamp
-        );
+        const errorHtmlContent = getErrorEmailHtml(error || { message: "Unknown error", stack: "" }, duration, startTimestamp);
         await sendEmail({
           subject: "❌ CRON Job Failed: Deal Pipeline",
-          text: `The CRON job failed after ${duration}s.\nError: ${
-            error.message
-          }\nTime: ${new Date().toLocaleString()}`,
+          text: `The CRON job failed after ${duration}s.\nError: ${error?.message || "Unknown error"}\nTime: ${new Date().toLocaleString()}`,
           html: errorHtmlContent,
         });
       } finally {
